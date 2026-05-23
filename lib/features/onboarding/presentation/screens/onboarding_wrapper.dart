@@ -35,8 +35,8 @@ class OnboardingWrapper extends ConsumerWidget {
             // Progress indicator
             if (step > 0 && step < steps.length - 1)
               Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.only(
+                    left: 24, right: 24, top: 12, bottom: 4),
                 child: Column(
                   children: [
                     Row(
@@ -206,7 +206,20 @@ class _BasicDetailsStepState extends ConsumerState<_BasicDetailsStep> {
         'githubUrl': _githubCtrl.text.trim(),
         'linkedinUrl': _linkedinCtrl.text.trim(),
       });
-      ref.read(onboardingStepProvider.notifier).state++;
+      if (mounted) {
+        ref.read(onboardingStepProvider.notifier).state++;
+      }
+    } catch (e, stack) {
+      debugPrint('Error saving basic details during onboarding: $e');
+      debugPrint(stack.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving details: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -296,29 +309,44 @@ class _SkillsStepState extends ConsumerState<_SkillsStep> {
       ref.read(onboardingStepProvider.notifier).state++;
       return;
     }
-    for (final skill in _skills) {
-      await ref
-          .read(profileRepositoryProvider)
-          .addSkill(uid, skill, 'General');
+    try {
+      for (final skill in _skills) {
+        await ref
+            .read(profileRepositoryProvider)
+            .addSkill(uid, skill, 'General');
+      }
+      if (mounted) {
+        ref.read(onboardingStepProvider.notifier).state++;
+      }
+    } catch (e, stack) {
+      debugPrint('Error saving skills during onboarding: $e');
+      debugPrint(stack.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving skills: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
-    ref.read(onboardingStepProvider.notifier).state++;
   }
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.only(left: 24, right: 24, bottom: 24, top: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('What are your skills?',
               style: AppTypography.displaySmall),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text('Add technologies, tools, and frameworks.',
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               )),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
           // Input
           Row(
             children: [
@@ -418,56 +446,265 @@ class _SkillsStepState extends ConsumerState<_SkillsStep> {
   }
 }
 
-class _EducationStep extends ConsumerWidget {
+class _EducationStep extends ConsumerStatefulWidget {
   const _EducationStep();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
+  ConsumerState<_EducationStep> createState() => _EducationStepState();
+}
+
+class _EducationStepState extends ConsumerState<_EducationStep> {
+  final _school10Ctrl = TextEditingController();
+  final _board10Ctrl = TextEditingController();
+  final _pct10Ctrl = TextEditingController();
+  final _year10Ctrl = TextEditingController();
+
+  final _school12Ctrl = TextEditingController();
+  final _board12Ctrl = TextEditingController();
+  final _pct12Ctrl = TextEditingController();
+  final _year12Ctrl = TextEditingController();
+
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _school10Ctrl.addListener(_onTextChanged);
+    _board10Ctrl.addListener(_onTextChanged);
+    _school12Ctrl.addListener(_onTextChanged);
+    _board12Ctrl.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _school10Ctrl.dispose();
+    _board10Ctrl.dispose();
+    _pct10Ctrl.dispose();
+    _year10Ctrl.dispose();
+    _school12Ctrl.dispose();
+    _board12Ctrl.dispose();
+    _pct12Ctrl.dispose();
+    _year12Ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final uid = ref.read(currentUserProvider)?.uid;
+    if (uid == null) {
+      ref.read(onboardingStepProvider.notifier).state++;
+      return;
+    }
+
+    final school10 = _school10Ctrl.text.trim();
+    final board10 = _board10Ctrl.text.trim();
+    final pct10 = _pct10Ctrl.text.trim();
+    final year10 = _year10Ctrl.text.trim();
+
+    final school12 = _school12Ctrl.text.trim();
+    final board12 = _board12Ctrl.text.trim();
+    final pct12 = _pct12Ctrl.text.trim();
+    final year12 = _year12Ctrl.text.trim();
+
+    if (school10.isEmpty && board10.isEmpty && school12.isEmpty && board12.isEmpty) {
+      ref.read(onboardingStepProvider.notifier).state++;
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      final profileRepo = ref.read(profileRepositoryProvider);
+      
+      if (school10.isNotEmpty || board10.isNotEmpty) {
+        await profileRepo.addEducation(uid, {
+          'degree': '10th Standard',
+          'institution': school10,
+          'board': board10,
+          'percentage': pct10,
+          'endYear': year10,
+        });
+      }
+      
+      if (school12.isNotEmpty || board12.isNotEmpty) {
+        await profileRepo.addEducation(uid, {
+          'degree': '12th Standard',
+          'institution': school12,
+          'board': board12,
+          'percentage': pct12,
+          'endYear': year12,
+        });
+      }
+      
+      if (mounted) {
+        ref.read(onboardingStepProvider.notifier).state++;
+      }
+    } catch (e, stack) {
+      debugPrint('Error saving education during onboarding: $e');
+      debugPrint(stack.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving education: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isSkip = _school10Ctrl.text.trim().isEmpty &&
+        _board10Ctrl.text.trim().isEmpty &&
+        _school12Ctrl.text.trim().isEmpty &&
+        _board12Ctrl.text.trim().isEmpty;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(left: 24, right: 24, bottom: 24, top: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('Your Education',
-              style: AppTypography.displaySmall),
-          const SizedBox(height: 8),
+          Text('Your Education', style: AppTypography.displaySmall),
+          const SizedBox(height: 6),
           Text('Add your degrees and qualifications.',
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               )),
-          const SizedBox(height: 40),
-          // Placeholder — education detail added from profile
+          const SizedBox(height: 18),
+          
+          // ── 10th Standard Card ──
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.accentContainer,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: AppColors.accent.withOpacity(0.2)),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.school_outlined,
-                    color: AppColors.accent),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'You can add detailed education from your Profile after setup.',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.accent,
+                Row(
+                  children: [
+                    const Icon(Icons.school_outlined, color: AppColors.accent, size: 18),
+                    const SizedBox(width: 8),
+                    Text('10th Standard (High School)', style: AppTypography.titleMedium),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _OnboardingField(
+                  label: 'School Name',
+                  ctrl: _school10Ctrl,
+                  hint: 'St. Mary\'s School',
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: _OnboardingField(
+                        label: 'Board (e.g. CBSE)',
+                        ctrl: _board10Ctrl,
+                        hint: 'CBSE',
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: _OnboardingField(
+                        label: 'Pct (%)',
+                        ctrl: _pct10Ctrl,
+                        hint: '92.4%',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: _OnboardingField(
+                        label: 'Year',
+                        ctrl: _year10Ctrl,
+                        hint: '2020',
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          const Spacer(),
+          
+          const SizedBox(height: 20),
+          
+          // ── 12th Standard Card ──
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.school_rounded, color: AppColors.accent, size: 18),
+                    const SizedBox(width: 8),
+                    Text('12th Standard (Intermediate)', style: AppTypography.titleMedium),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _OnboardingField(
+                  label: 'School / Institution Name',
+                  ctrl: _school12Ctrl,
+                  hint: 'St. Mary\'s Junior College',
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: _OnboardingField(
+                        label: 'Board (e.g. CBSE)',
+                        ctrl: _board12Ctrl,
+                        hint: 'CBSE',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: _OnboardingField(
+                        label: 'Pct (%)',
+                        ctrl: _pct12Ctrl,
+                        hint: '94.8%',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: _OnboardingField(
+                        label: 'Year',
+                        ctrl: _year12Ctrl,
+                        hint: '2022',
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 28),
           AppButton(
-            label: AppStrings.next,
-            onTap: () =>
-                ref.read(onboardingStepProvider.notifier).state++,
-            variant: AppButtonVariant.accent,
+            label: _saving ? 'Saving...' : (isSkip ? 'Skip →' : AppStrings.next),
+            onTap: _saving ? null : _save,
+            isLoading: _saving,
+            variant: isSkip ? AppButtonVariant.ghost : AppButtonVariant.accent,
           ),
         ],
       ),
@@ -502,7 +739,20 @@ class _SummaryStepState extends ConsumerState<_SummaryStep> {
           'onboardingComplete': true,
         });
       }
-      ref.read(onboardingStepProvider.notifier).state++;
+      if (mounted) {
+        ref.read(onboardingStepProvider.notifier).state++;
+      }
+    } catch (e, stack) {
+      debugPrint('Error completing onboarding: $e');
+      debugPrint(stack.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving profile: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

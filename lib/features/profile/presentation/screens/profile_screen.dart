@@ -181,12 +181,12 @@ class _ProfileContent extends ConsumerWidget {
 
 // ── Profile Header ─────────────────────────────────────────
 
-class _ProfileHeader extends StatelessWidget {
+class _ProfileHeader extends ConsumerWidget {
   final UserModel user;
   const _ProfileHeader({required this.user});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Row(
       children: [
         CircleAvatar(
@@ -226,7 +226,7 @@ class _ProfileHeader extends StatelessWidget {
           ),
         ),
         IconButton(
-          onPressed: () {}, // edit profile
+          onPressed: () => _showEditProfileDialog(context, user, ref),
           icon: Container(
             width: 36,
             height: 36,
@@ -238,6 +238,93 @@ class _ProfileHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  void _showEditProfileDialog(BuildContext ctx, UserModel user, WidgetRef ref) {
+    final nameCtrl = TextEditingController(text: user.name);
+    final roleCtrl = TextEditingController(text: user.currentRole);
+    final phoneCtrl = TextEditingController(text: user.phone);
+    final locationCtrl = TextEditingController(text: user.location);
+    final githubCtrl = TextEditingController(text: user.githubUrl);
+    final linkedinCtrl = TextEditingController(text: user.linkedinUrl);
+    final summaryCtrl = TextEditingController(text: user.summary);
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Edit Profile'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Full Name'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: roleCtrl,
+                decoration: const InputDecoration(labelText: 'Current Role / Headline'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: phoneCtrl,
+                decoration: const InputDecoration(labelText: 'Phone'),
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: locationCtrl,
+                decoration: const InputDecoration(labelText: 'Location'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: githubCtrl,
+                decoration: const InputDecoration(labelText: 'GitHub URL'),
+                keyboardType: TextInputType.url,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: linkedinCtrl,
+                decoration: const InputDecoration(labelText: 'LinkedIn URL'),
+                keyboardType: TextInputType.url,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: summaryCtrl,
+                decoration: const InputDecoration(labelText: 'Professional Summary'),
+                maxLines: 3,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await ref
+                  .read(profileRepositoryProvider)
+                  .updateUser(user.uid, {
+                'name': nameCtrl.text.trim(),
+                'currentRole': roleCtrl.text.trim(),
+                'phone': phoneCtrl.text.trim(),
+                'location': locationCtrl.text.trim(),
+                'githubUrl': githubCtrl.text.trim(),
+                'linkedinUrl': linkedinCtrl.text.trim(),
+                'summary': summaryCtrl.text.trim(),
+              });
+              if (dialogCtx.mounted) {
+                Navigator.pop(dialogCtx);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -534,15 +621,26 @@ class _EducationContent extends StatelessWidget {
         final items = snap.data ?? [];
         return Column(
           children: [
-            ...items.map((e) => _TimelineItem(
-                  title: e['institution'] as String? ?? '',
-                  subtitle:
-                      '${e['degree'] ?? ''} ${e['field'] ?? ''}',
-                  trailing: '${e['startYear'] ?? ''} – ${e['endYear'] ?? ''}',
-                )),
+            ...items.map((e) {
+              final isSchool = e['degree'] == '10th Standard' || e['degree'] == '12th Standard';
+              final title = isSchool ? (e['degree'] as String) : (e['institution'] as String? ?? '');
+              final subtitle = isSchool 
+                  ? '${e['institution'] ?? ''}${e['board'] != null && e['board'].toString().isNotEmpty ? " (${e['board']})" : ""}'
+                  : '${e['degree'] ?? ''}${e['field'] != null && e['field'].toString().isNotEmpty ? " - ${e['field']}" : ""}';
+              
+              final trailing = isSchool
+                  ? '${e['percentage'] != null && e['percentage'].toString().isNotEmpty ? "${e['percentage']} | " : ""}${e['endYear'] ?? ''}'
+                  : '${e['startYear'] != null && e['startYear'].toString().isNotEmpty ? "${e['startYear']} – " : ""}${e['endYear'] ?? ''}';
+
+              return _TimelineItem(
+                title: title,
+                subtitle: subtitle,
+                trailing: trailing,
+              );
+            }),
             _AddButton(
               label: AppStrings.addEducation,
-              onTap: () => _showAddDialog(context, uid, ref),
+              onTap: () => _showAddDialog(context, uid, ref, items),
             ),
           ],
         );
@@ -550,43 +648,191 @@ class _EducationContent extends StatelessWidget {
     );
   }
 
-  void _showAddDialog(BuildContext ctx, String uid, WidgetRef ref) {
-    final institutionCtrl = TextEditingController();
-    final degreeCtrl = TextEditingController();
-    showDialog(
-      context: ctx,
-      builder: (_) => AlertDialog(
-        title: const Text('Add Education'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: institutionCtrl,
-              decoration:
-                  const InputDecoration(hintText: 'Institution'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: degreeCtrl,
-              decoration: const InputDecoration(hintText: 'Degree'),
+  void _showAddDialog(BuildContext ctx, String uid, WidgetRef ref, List<Map<String, dynamic>> items) {
+    final has10th = items.any((e) => e['degree'] == '10th Standard');
+    final has12th = items.any((e) => e['degree'] == '12th Standard');
+
+    if (has10th && has12th) {
+      _showAddHigherEducationDialog(ctx, uid, ref);
+    } else {
+      showDialog(
+        context: ctx,
+        builder: (dialogCtx) => AlertDialog(
+          title: const Text('Add Education'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!has10th) ...[
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.school_outlined),
+                  label: const Text('Add 10th Standard'),
+                  onPressed: () {
+                    Navigator.pop(dialogCtx);
+                    _showAddSchoolDialog(ctx, uid, ref, '10th Standard');
+                  },
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (!has12th) ...[
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.school_rounded),
+                  label: const Text('Add 12th Standard'),
+                  onPressed: () {
+                    Navigator.pop(dialogCtx);
+                    _showAddSchoolDialog(ctx, uid, ref, '12th Standard');
+                  },
+                ),
+                const SizedBox(height: 10),
+              ],
+              OutlinedButton.icon(
+                icon: const Icon(Icons.menu_book_rounded),
+                label: const Text('Add Higher Education'),
+                onPressed: () {
+                  Navigator.pop(dialogCtx);
+                  _showAddHigherEducationDialog(ctx, uid, ref);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Close'),
             ),
           ],
         ),
+      );
+    }
+  }
+
+  void _showAddSchoolDialog(BuildContext ctx, String uid, WidgetRef ref, String degree) {
+    final schoolCtrl = TextEditingController();
+    final boardCtrl = TextEditingController();
+    final pctCtrl = TextEditingController();
+    final yearCtrl = TextEditingController();
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: Text('Add $degree Details'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: schoolCtrl,
+                decoration: const InputDecoration(hintText: 'School Name'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: boardCtrl,
+                decoration: const InputDecoration(hintText: 'Board (e.g. CBSE, State Board)'),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: pctCtrl,
+                      decoration: const InputDecoration(hintText: 'Percentage (%)'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: yearCtrl,
+                      decoration: const InputDecoration(hintText: 'Passing Year'),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () => Navigator.pop(dialogCtx),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
-              final navigator = Navigator.of(ctx);
+              await ref
+                  .read(profileRepositoryProvider)
+                  .addEducation(uid, {
+                'degree': degree,
+                'institution': schoolCtrl.text.trim(),
+                'board': boardCtrl.text.trim(),
+                'percentage': pctCtrl.text.trim(),
+                'endYear': yearCtrl.text.trim(),
+              });
+              if (dialogCtx.mounted) {
+                Navigator.pop(dialogCtx);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddHigherEducationDialog(BuildContext ctx, String uid, WidgetRef ref) {
+    final institutionCtrl = TextEditingController();
+    final degreeCtrl = TextEditingController();
+    final fieldCtrl = TextEditingController();
+    final yearCtrl = TextEditingController();
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Add Higher Education'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: institutionCtrl,
+                decoration: const InputDecoration(hintText: 'Institution / College'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: degreeCtrl,
+                decoration: const InputDecoration(hintText: 'Degree (e.g. B.Tech, MBA)'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: fieldCtrl,
+                decoration: const InputDecoration(hintText: 'Field of Study (e.g. Computer Science)'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: yearCtrl,
+                decoration: const InputDecoration(hintText: 'Graduation Year'),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
               await ref
                   .read(profileRepositoryProvider)
                   .addEducation(uid, {
                 'institution': institutionCtrl.text.trim(),
                 'degree': degreeCtrl.text.trim(),
+                'field': fieldCtrl.text.trim(),
+                'endYear': yearCtrl.text.trim(),
               });
-              navigator.pop();
+              if (dialogCtx.mounted) {
+                Navigator.pop(dialogCtx);
+              }
             },
             child: const Text('Add'),
           ),
@@ -616,11 +862,65 @@ class _ExperienceContent extends StatelessWidget {
                 )),
             _AddButton(
               label: AppStrings.addExperience,
-              onTap: () {},
+              onTap: () => _showAddExperienceDialog(context, uid, ref),
             ),
           ],
         );
       },
+    );
+  }
+
+  void _showAddExperienceDialog(BuildContext ctx, String uid, WidgetRef ref) {
+    final roleCtrl = TextEditingController();
+    final companyCtrl = TextEditingController();
+    final durationCtrl = TextEditingController();
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Add Experience'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: roleCtrl,
+              decoration: const InputDecoration(hintText: 'Role / Job Title'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: companyCtrl,
+              decoration: const InputDecoration(hintText: 'Company'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: durationCtrl,
+              decoration: const InputDecoration(hintText: 'Duration (e.g. 2024 - Present)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await ref
+                  .read(profileRepositoryProvider)
+                  .addExperience(uid, {
+                'role': roleCtrl.text.trim(),
+                'company': companyCtrl.text.trim(),
+                'duration': durationCtrl.text.trim(),
+                'startDate': DateTime.now(), // Safe ordering fallback
+              });
+              if (dialogCtx.mounted) {
+                Navigator.pop(dialogCtx);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -645,11 +945,64 @@ class _CertificationsContent extends StatelessWidget {
                 )),
             _AddButton(
               label: AppStrings.addCertification,
-              onTap: () {},
+              onTap: () => _showAddCertificationDialog(context, uid, ref),
             ),
           ],
         );
       },
+    );
+  }
+
+  void _showAddCertificationDialog(BuildContext ctx, String uid, WidgetRef ref) {
+    final titleCtrl = TextEditingController();
+    final issuerCtrl = TextEditingController();
+    final dateCtrl = TextEditingController();
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Add Certification'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              decoration: const InputDecoration(hintText: 'Certification Name'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: issuerCtrl,
+              decoration: const InputDecoration(hintText: 'Issuer'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: dateCtrl,
+              decoration: const InputDecoration(hintText: 'Date (e.g. May 2026)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await ref
+                  .read(profileRepositoryProvider)
+                  .addCertification(uid, {
+                'title': titleCtrl.text.trim(),
+                'issuer': issuerCtrl.text.trim(),
+                'date': dateCtrl.text.trim(),
+              });
+              if (dialogCtx.mounted) {
+                Navigator.pop(dialogCtx);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -686,11 +1039,46 @@ class _AchievementsContent extends StatelessWidget {
                 )),
             _AddButton(
               label: AppStrings.addAchievement,
-              onTap: () {},
+              onTap: () => _showAddAchievementDialog(context, uid, ref),
             ),
           ],
         );
       },
+    );
+  }
+
+  void _showAddAchievementDialog(BuildContext ctx, String uid, WidgetRef ref) {
+    final titleCtrl = TextEditingController();
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Add Achievement'),
+        content: TextField(
+          controller: titleCtrl,
+          decoration: const InputDecoration(hintText: 'e.g. First place in Google Hackathon'),
+          maxLines: 2,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await ref
+                  .read(profileRepositoryProvider)
+                  .addAchievement(uid, {
+                'title': titleCtrl.text.trim(),
+              });
+              if (dialogCtx.mounted) {
+                Navigator.pop(dialogCtx);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
     );
   }
 }

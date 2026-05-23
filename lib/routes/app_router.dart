@@ -21,15 +21,31 @@ import '../shared/widgets/app_shell.dart';
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
+class RouterTransitionNotifier extends ChangeNotifier {
+  final Ref _ref;
+
+  RouterTransitionNotifier(this._ref) {
+    _ref.listen(authStateProvider, (_, __) {
+      notifyListeners();
+    });
+  }
+}
+
+final routerTransitionNotifierProvider = Provider((ref) {
+  return RouterTransitionNotifier(ref);
+});
+
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  final listenable = ref.watch(routerTransitionNotifierProvider);
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: RouteNames.splash,
+    refreshListenable: listenable,
     debugLogDiagnostics: true,
     redirect: (context, state) {
-      final isAuthenticated = authState.valueOrNull != null;
+      final user = ref.read(currentUserProvider);
+      final isAuthenticated = user != null;
       final location = state.uri.toString();
 
       final isOnSplash = location == RouteNames.splash;
