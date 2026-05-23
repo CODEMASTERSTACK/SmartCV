@@ -4,10 +4,11 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/constants/app_typography.dart';
 import '../../../../features/auth/presentation/providers/auth_provider.dart';
-import '../../../../features/dashboard/presentation/screens/dashboard_screen.dart';
+import '../../../../features/dashboard/presentation/screens/dashboard_screen.dart'; // for userProfileProvider
 import '../../../../features/profile/data/repositories/profile_repository.dart';
 import '../../../../features/profile/domain/entities/user_model.dart';
 import '../../../../shared/widgets/app_button.dart';
+
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -503,6 +504,51 @@ class _SummaryContent extends StatelessWidget {
   }
 }
 
+// ── Skills ────────────────────────────────────────────────
+
+/// The four fixed skill categories used throughout the app.
+/// These exact strings are stored as the `category` field in Firestore
+/// and are used by the PDF renderer to produce the labelled resume rows.
+const List<_SkillCategory> _kSkillCategories = [
+  _SkillCategory(
+    name: 'Languages',
+    icon: Icons.code_rounded,
+    hint: 'e.g. C, C++, Python, Java, SQL',
+    color: Color(0xFF6366F1), // indigo
+  ),
+  _SkillCategory(
+    name: 'Tools/Platforms',
+    icon: Icons.build_rounded,
+    hint: 'e.g. Git & GitHub, Power BI, Tableau',
+    color: Color(0xFF0EA5E9), // sky blue
+  ),
+  _SkillCategory(
+    name: 'DevOps & Cloud',
+    icon: Icons.cloud_rounded,
+    hint: 'e.g. CI/CD (GitHub Actions), Azure',
+    color: Color(0xFF10B981), // emerald
+  ),
+  _SkillCategory(
+    name: 'Soft Skills',
+    icon: Icons.psychology_rounded,
+    hint: 'e.g. Problem-Solving, Team Player',
+    color: Color(0xFFF59E0B), // amber
+  ),
+];
+
+class _SkillCategory {
+  final String name;
+  final IconData icon;
+  final String hint;
+  final Color color;
+  const _SkillCategory({
+    required this.name,
+    required this.icon,
+    required this.hint,
+    required this.color,
+  });
+}
+
 class _SkillsContent extends StatelessWidget {
   final String uid;
   final WidgetRef ref;
@@ -513,71 +559,206 @@ class _SkillsContent extends StatelessWidget {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: ref.read(profileRepositoryProvider).watchSkills(uid),
       builder: (context, snap) {
-        final skills = snap.data ?? [];
+        final allSkills = snap.data ?? [];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ...skills.map((s) => _SkillChip(name: s['name'] as String)),
-                GestureDetector(
-                  onTap: () => _addSkillDialog(context, uid, ref),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.accentContainer,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: AppColors.accent.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.add_rounded,
-                            size: 14, color: AppColors.accent),
-                        const SizedBox(width: 4),
-                        Text(AppStrings.addSkill,
-                            style: AppTypography.labelSmall.copyWith(
-                              color: AppColors.accent,
-                            )),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          children: _kSkillCategories.map((cat) {
+            final catSkills = allSkills
+                .where((s) => (s['category'] as String? ?? '') == cat.name)
+                .toList();
+            return _SkillCategoryRow(
+              category: cat,
+              skills: catSkills,
+              uid: uid,
+              ref: ref,
+            );
+          }).toList(),
         );
       },
     );
   }
+}
 
-  void _addSkillDialog(BuildContext ctx, String uid, WidgetRef ref) {
+class _SkillCategoryRow extends StatefulWidget {
+  final _SkillCategory category;
+  final List<Map<String, dynamic>> skills;
+  final String uid;
+  final WidgetRef ref;
+
+  const _SkillCategoryRow({
+    required this.category,
+    required this.skills,
+    required this.uid,
+    required this.ref,
+  });
+
+  @override
+  State<_SkillCategoryRow> createState() => _SkillCategoryRowState();
+}
+
+class _SkillCategoryRowState extends State<_SkillCategoryRow> {
+  bool _expanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final cat = widget.category;
+    final skills = widget.skills;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Category header row
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: cat.color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(cat.icon, size: 13, color: cat.color),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    cat.name,
+                    style: AppTypography.labelMedium.copyWith(
+                      color: cat.color,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (skills.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: cat.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${skills.length}',
+                        style: AppTypography.caption.copyWith(color: cat.color),
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  AnimatedRotation(
+                    turns: _expanded ? 0 : -0.25,
+                    duration: const Duration(milliseconds: 180),
+                    child: Icon(Icons.expand_more_rounded,
+                        size: 18, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Chips + add button
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 180),
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.only(top: 6, left: 4),
+              child: Wrap(
+                spacing: 7,
+                runSpacing: 7,
+                children: [
+                  ...skills.map((s) => _SkillChip(
+                        name: s['name'] as String,
+                        color: cat.color,
+                        onEdit: () => _showEditSkillDialog(
+                            context, s['id'] as String, s['name'] as String),
+                        onDelete: () => _confirmDelete(
+                            context, s['id'] as String, s['name'] as String),
+                      )),
+                  // "+ Add" chip
+                  GestureDetector(
+                    onTap: () => _showAddDialog(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: cat.color.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: cat.color.withValues(alpha: 0.35),
+                            width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add_rounded,
+                              size: 13, color: cat.color),
+                          const SizedBox(width: 3),
+                          Text(
+                            'Add',
+                            style: AppTypography.labelSmall
+                                .copyWith(color: cat.color),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          Divider(height: 16, color: AppColors.border.withValues(alpha: 0.5)),
+        ],
+      ),
+    );
+  }
+
+  void _showAddDialog(BuildContext ctx) {
     final ctrl = TextEditingController();
     showDialog(
       context: ctx,
-      builder: (_) => AlertDialog(
-        title: const Text('Add Skill'),
+      builder: (dCtx) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: widget.category.color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Icon(widget.category.icon,
+                  size: 15, color: widget.category.color),
+            ),
+            const SizedBox(width: 10),
+            Text('Add ${widget.category.name}'),
+          ],
+        ),
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'e.g., Flutter'),
+          decoration: InputDecoration(hintText: widget.category.hint),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () => Navigator.pop(dCtx),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
-              if (ctrl.text.trim().isNotEmpty) {
-                final navigator = Navigator.of(ctx);
-                await ref
+              final text = ctrl.text.trim();
+              if (text.isNotEmpty) {
+                final navigator = Navigator.of(dCtx);
+                await widget.ref
                     .read(profileRepositoryProvider)
-                    .addSkill(uid, ctrl.text.trim(), 'General');
+                    .addSkill(widget.uid, text, widget.category.name);
                 navigator.pop();
               }
             },
@@ -587,26 +768,172 @@ class _SkillsContent extends StatelessWidget {
       ),
     );
   }
+
+  void _showEditSkillDialog(
+      BuildContext ctx, String skillId, String currentName) {
+    final ctrl = TextEditingController(text: currentName);
+    showDialog(
+      context: ctx,
+      builder: (dCtx) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: widget.category.color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Icon(Icons.edit_outlined,
+                  size: 15, color: widget.category.color),
+            ),
+            const SizedBox(width: 10),
+            const Text('Edit Skill'),
+          ],
+        ),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Skill name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final text = ctrl.text.trim();
+              if (text.isNotEmpty && text != currentName) {
+                final navigator = Navigator.of(dCtx);
+                await widget.ref
+                    .read(profileRepositoryProvider)
+                    .updateSkill(widget.uid, skillId, text);
+                navigator.pop();
+              } else {
+                Navigator.pop(dCtx);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext ctx, String skillId, String skillName) {
+    showDialog(
+      context: ctx,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Remove Skill'),
+        content: Text('Remove "$skillName"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
+              final navigator = Navigator.of(dCtx);
+              await widget.ref
+                  .read(profileRepositoryProvider)
+                  .deleteSkill(widget.uid, skillId);
+              navigator.pop();
+            },
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SkillChip extends StatelessWidget {
   final String name;
-  const _SkillChip({required this.name});
+  final Color color;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _SkillChip({
+    required this.name,
+    required this.color,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
+    return GestureDetector(
+      onTap: () => _showMenu(context),
+      onLongPress: () => _showMenu(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(name, style: AppTypography.labelSmall),
+            const SizedBox(width: 5),
+            Icon(Icons.more_horiz_rounded,
+                size: 13, color: AppColors.textDisabled),
+          ],
+        ),
       ),
-      child: Text(name, style: AppTypography.labelSmall),
     );
   }
+
+  void _showMenu(BuildContext context) {
+    final RenderBox box = context.findRenderObject() as RenderBox;
+    final Offset offset = box.localToGlobal(Offset.zero);
+    final Size size = box.size;
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        offset.dx,
+        offset.dy + size.height + 4,
+        offset.dx + size.width,
+        offset.dy + size.height + 4 + 100,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      items: [
+        PopupMenuItem(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined, size: 16, color: color),
+              const SizedBox(width: 10),
+              const Text('Edit'),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(height: 1),
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline_rounded,
+                  size: 16, color: AppColors.error),
+              const SizedBox(width: 10),
+              Text('Delete',
+                  style: TextStyle(color: AppColors.error)),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'edit') onEdit();
+      if (value == 'delete') onDelete();
+    });
+  }
 }
+
+// ── Education ─────────────────────────────────────────────
 
 class _EducationContent extends StatelessWidget {
   final String uid;
@@ -624,18 +951,22 @@ class _EducationContent extends StatelessWidget {
             ...items.map((e) {
               final isSchool = e['degree'] == '10th Standard' || e['degree'] == '12th Standard';
               final title = isSchool ? (e['degree'] as String) : (e['institution'] as String? ?? '');
-              final subtitle = isSchool 
+              final subtitle = isSchool
                   ? '${e['institution'] ?? ''}${e['board'] != null && e['board'].toString().isNotEmpty ? " (${e['board']})" : ""}'
                   : '${e['degree'] ?? ''}${e['field'] != null && e['field'].toString().isNotEmpty ? " - ${e['field']}" : ""}';
-              
+
               final trailing = isSchool
                   ? '${e['percentage'] != null && e['percentage'].toString().isNotEmpty ? "${e['percentage']} | " : ""}${e['endYear'] ?? ''}'
                   : '${e['startYear'] != null && e['startYear'].toString().isNotEmpty ? "${e['startYear']} – " : ""}${e['endYear'] ?? ''}';
 
-              return _TimelineItem(
+              return _EditableTimelineItem(
                 title: title,
                 subtitle: subtitle,
                 trailing: trailing,
+                onEdit: () => isSchool
+                    ? _showEditSchoolDialog(context, uid, e)
+                    : _showEditHigherEducationDialog(context, uid, e),
+                onDelete: () => _confirmDelete(context, uid, e['id'] as String, title),
               );
             }),
             _AddButton(
@@ -645,6 +976,123 @@ class _EducationContent extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+
+  void _confirmDelete(BuildContext ctx, String uid, String id, String title) {
+    showDialog(
+      context: ctx,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Delete Education'),
+        content: Text('Delete "$title"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
+              final navigator = Navigator.of(dCtx);
+              await ref.read(profileRepositoryProvider).deleteEducation(uid, id);
+              navigator.pop();
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditSchoolDialog(BuildContext ctx, String uid, Map<String, dynamic> e) {
+    final schoolCtrl = TextEditingController(text: e['institution'] as String? ?? '');
+    final boardCtrl = TextEditingController(text: e['board'] as String? ?? '');
+    final pctCtrl = TextEditingController(text: e['percentage'] as String? ?? '');
+    final yearCtrl = TextEditingController(text: e['endYear'] as String? ?? '');
+    final degree = e['degree'] as String;
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: Text('Edit $degree Details'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: schoolCtrl, decoration: const InputDecoration(hintText: 'School Name')),
+              const SizedBox(height: 8),
+              TextField(controller: boardCtrl, decoration: const InputDecoration(hintText: 'Board (e.g. CBSE)')),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: TextField(controller: pctCtrl, decoration: const InputDecoration(hintText: 'Percentage (%)'))),
+                const SizedBox(width: 8),
+                Expanded(child: TextField(controller: yearCtrl, decoration: const InputDecoration(hintText: 'Passing Year'), keyboardType: TextInputType.number)),
+              ]),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              await ref.read(profileRepositoryProvider).updateEducation(uid, e['id'] as String, {
+                'institution': schoolCtrl.text.trim(),
+                'board': boardCtrl.text.trim(),
+                'percentage': pctCtrl.text.trim(),
+                'endYear': yearCtrl.text.trim(),
+              });
+              if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditHigherEducationDialog(BuildContext ctx, String uid, Map<String, dynamic> e) {
+    final institutionCtrl = TextEditingController(text: e['institution'] as String? ?? '');
+    final degreeCtrl = TextEditingController(text: e['degree'] as String? ?? '');
+    final fieldCtrl = TextEditingController(text: e['field'] as String? ?? '');
+    final startYearCtrl = TextEditingController(text: e['startYear'] as String? ?? '');
+    final endYearCtrl = TextEditingController(text: e['endYear'] as String? ?? '');
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Edit Higher Education'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: institutionCtrl, decoration: const InputDecoration(hintText: 'Institution / College')),
+              const SizedBox(height: 8),
+              TextField(controller: degreeCtrl, decoration: const InputDecoration(hintText: 'Degree (e.g. B.Tech)')),
+              const SizedBox(height: 8),
+              TextField(controller: fieldCtrl, decoration: const InputDecoration(hintText: 'Field of Study')),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: TextField(controller: startYearCtrl, decoration: const InputDecoration(hintText: 'Start Year'), keyboardType: TextInputType.number)),
+                const SizedBox(width: 8),
+                Expanded(child: TextField(controller: endYearCtrl, decoration: const InputDecoration(hintText: 'End Year'), keyboardType: TextInputType.number)),
+              ]),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              await ref.read(profileRepositoryProvider).updateEducation(uid, e['id'] as String, {
+                'institution': institutionCtrl.text.trim(),
+                'degree': degreeCtrl.text.trim(),
+                'field': fieldCtrl.text.trim(),
+                'startYear': startYearCtrl.text.trim(),
+                'endYear': endYearCtrl.text.trim(),
+              });
+              if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -720,56 +1168,30 @@ class _EducationContent extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: schoolCtrl,
-                decoration: const InputDecoration(hintText: 'School Name'),
-              ),
+              TextField(controller: schoolCtrl, decoration: const InputDecoration(hintText: 'School Name')),
               const SizedBox(height: 8),
-              TextField(
-                controller: boardCtrl,
-                decoration: const InputDecoration(hintText: 'Board (e.g. CBSE, State Board)'),
-              ),
+              TextField(controller: boardCtrl, decoration: const InputDecoration(hintText: 'Board (e.g. CBSE, State Board)')),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: pctCtrl,
-                      decoration: const InputDecoration(hintText: 'Percentage (%)'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: yearCtrl,
-                      decoration: const InputDecoration(hintText: 'Passing Year'),
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                ],
-              ),
+              Row(children: [
+                Expanded(child: TextField(controller: pctCtrl, decoration: const InputDecoration(hintText: 'Percentage (%)'))),
+                const SizedBox(width: 8),
+                Expanded(child: TextField(controller: yearCtrl, decoration: const InputDecoration(hintText: 'Passing Year'), keyboardType: TextInputType.number)),
+              ]),
             ],
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              await ref
-                  .read(profileRepositoryProvider)
-                  .addEducation(uid, {
+              await ref.read(profileRepositoryProvider).addEducation(uid, {
                 'degree': degree,
                 'institution': schoolCtrl.text.trim(),
                 'board': boardCtrl.text.trim(),
                 'percentage': pctCtrl.text.trim(),
                 'endYear': yearCtrl.text.trim(),
               });
-              if (dialogCtx.mounted) {
-                Navigator.pop(dialogCtx);
-              }
+              if (dialogCtx.mounted) Navigator.pop(dialogCtx);
             },
             child: const Text('Add'),
           ),
@@ -782,7 +1204,8 @@ class _EducationContent extends StatelessWidget {
     final institutionCtrl = TextEditingController();
     final degreeCtrl = TextEditingController();
     final fieldCtrl = TextEditingController();
-    final yearCtrl = TextEditingController();
+    final startYearCtrl = TextEditingController();
+    final endYearCtrl = TextEditingController();
 
     showDialog(
       context: ctx,
@@ -792,47 +1215,32 @@ class _EducationContent extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: institutionCtrl,
-                decoration: const InputDecoration(hintText: 'Institution / College'),
-              ),
+              TextField(controller: institutionCtrl, decoration: const InputDecoration(hintText: 'Institution / College')),
               const SizedBox(height: 8),
-              TextField(
-                controller: degreeCtrl,
-                decoration: const InputDecoration(hintText: 'Degree (e.g. B.Tech, MBA)'),
-              ),
+              TextField(controller: degreeCtrl, decoration: const InputDecoration(hintText: 'Degree (e.g. B.Tech, MBA)')),
               const SizedBox(height: 8),
-              TextField(
-                controller: fieldCtrl,
-                decoration: const InputDecoration(hintText: 'Field of Study (e.g. Computer Science)'),
-              ),
+              TextField(controller: fieldCtrl, decoration: const InputDecoration(hintText: 'Field of Study (e.g. Computer Science)')),
               const SizedBox(height: 8),
-              TextField(
-                controller: yearCtrl,
-                decoration: const InputDecoration(hintText: 'Graduation Year'),
-                keyboardType: TextInputType.number,
-              ),
+              Row(children: [
+                Expanded(child: TextField(controller: startYearCtrl, decoration: const InputDecoration(hintText: 'Start Year'), keyboardType: TextInputType.number)),
+                const SizedBox(width: 8),
+                Expanded(child: TextField(controller: endYearCtrl, decoration: const InputDecoration(hintText: 'End Year'), keyboardType: TextInputType.number)),
+              ]),
             ],
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              await ref
-                  .read(profileRepositoryProvider)
-                  .addEducation(uid, {
+              await ref.read(profileRepositoryProvider).addEducation(uid, {
                 'institution': institutionCtrl.text.trim(),
                 'degree': degreeCtrl.text.trim(),
                 'field': fieldCtrl.text.trim(),
-                'endYear': yearCtrl.text.trim(),
+                'startYear': startYearCtrl.text.trim(),
+                'endYear': endYearCtrl.text.trim(),
               });
-              if (dialogCtx.mounted) {
-                Navigator.pop(dialogCtx);
-              }
+              if (dialogCtx.mounted) Navigator.pop(dialogCtx);
             },
             child: const Text('Add'),
           ),
@@ -841,6 +1249,8 @@ class _EducationContent extends StatelessWidget {
     );
   }
 }
+
+// ── Experience ────────────────────────────────────────────
 
 class _ExperienceContent extends StatelessWidget {
   final String uid;
@@ -855,14 +1265,16 @@ class _ExperienceContent extends StatelessWidget {
         final items = snap.data ?? [];
         return Column(
           children: [
-            ...items.map((e) => _TimelineItem(
+            ...items.map((e) => _EditableTimelineItem(
                   title: e['role'] as String? ?? '',
                   subtitle: e['company'] as String? ?? '',
                   trailing: e['duration'] as String? ?? '',
+                  onEdit: () => _showEditDialog(context, uid, e),
+                  onDelete: () => _confirmDelete(context, uid, e['id'] as String, e['role'] as String? ?? 'this entry'),
                 )),
             _AddButton(
               label: AppStrings.addExperience,
-              onTap: () => _showAddExperienceDialog(context, uid, ref),
+              onTap: () => _showAddDialog(context, uid, ref),
             ),
           ],
         );
@@ -870,7 +1282,66 @@ class _ExperienceContent extends StatelessWidget {
     );
   }
 
-  void _showAddExperienceDialog(BuildContext ctx, String uid, WidgetRef ref) {
+  void _confirmDelete(BuildContext ctx, String uid, String id, String title) {
+    showDialog(
+      context: ctx,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Delete Experience'),
+        content: Text('Delete "$title"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
+              final navigator = Navigator.of(dCtx);
+              await ref.read(profileRepositoryProvider).deleteExperience(uid, id);
+              navigator.pop();
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditDialog(BuildContext ctx, String uid, Map<String, dynamic> e) {
+    final roleCtrl = TextEditingController(text: e['role'] as String? ?? '');
+    final companyCtrl = TextEditingController(text: e['company'] as String? ?? '');
+    final durationCtrl = TextEditingController(text: e['duration'] as String? ?? '');
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Edit Experience'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: roleCtrl, decoration: const InputDecoration(hintText: 'Role / Job Title')),
+            const SizedBox(height: 8),
+            TextField(controller: companyCtrl, decoration: const InputDecoration(hintText: 'Company')),
+            const SizedBox(height: 8),
+            TextField(controller: durationCtrl, decoration: const InputDecoration(hintText: 'Duration (e.g. 2024 - Present)')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              await ref.read(profileRepositoryProvider).updateExperience(uid, e['id'] as String, {
+                'role': roleCtrl.text.trim(),
+                'company': companyCtrl.text.trim(),
+                'duration': durationCtrl.text.trim(),
+              });
+              if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddDialog(BuildContext ctx, String uid, WidgetRef ref) {
     final roleCtrl = TextEditingController();
     final companyCtrl = TextEditingController();
     final durationCtrl = TextEditingController();
@@ -882,40 +1353,24 @@ class _ExperienceContent extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: roleCtrl,
-              decoration: const InputDecoration(hintText: 'Role / Job Title'),
-            ),
+            TextField(controller: roleCtrl, decoration: const InputDecoration(hintText: 'Role / Job Title')),
             const SizedBox(height: 8),
-            TextField(
-              controller: companyCtrl,
-              decoration: const InputDecoration(hintText: 'Company'),
-            ),
+            TextField(controller: companyCtrl, decoration: const InputDecoration(hintText: 'Company')),
             const SizedBox(height: 8),
-            TextField(
-              controller: durationCtrl,
-              decoration: const InputDecoration(hintText: 'Duration (e.g. 2024 - Present)'),
-            ),
+            TextField(controller: durationCtrl, decoration: const InputDecoration(hintText: 'Duration (e.g. 2024 - Present)')),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              await ref
-                  .read(profileRepositoryProvider)
-                  .addExperience(uid, {
+              await ref.read(profileRepositoryProvider).addExperience(uid, {
                 'role': roleCtrl.text.trim(),
                 'company': companyCtrl.text.trim(),
                 'duration': durationCtrl.text.trim(),
-                'startDate': DateTime.now(), // Safe ordering fallback
+                'startDate': DateTime.now(),
               });
-              if (dialogCtx.mounted) {
-                Navigator.pop(dialogCtx);
-              }
+              if (dialogCtx.mounted) Navigator.pop(dialogCtx);
             },
             child: const Text('Add'),
           ),
@@ -924,6 +1379,8 @@ class _ExperienceContent extends StatelessWidget {
     );
   }
 }
+
+// ── Certifications ────────────────────────────────────────
 
 class _CertificationsContent extends StatelessWidget {
   final String uid;
@@ -938,14 +1395,16 @@ class _CertificationsContent extends StatelessWidget {
         final items = snap.data ?? [];
         return Column(
           children: [
-            ...items.map((c) => _TimelineItem(
+            ...items.map((c) => _EditableTimelineItem(
                   title: c['title'] as String? ?? '',
                   subtitle: c['issuer'] as String? ?? '',
                   trailing: c['date'] as String? ?? '',
+                  onEdit: () => _showEditDialog(context, uid, c),
+                  onDelete: () => _confirmDelete(context, uid, c['id'] as String, c['title'] as String? ?? 'this entry'),
                 )),
             _AddButton(
               label: AppStrings.addCertification,
-              onTap: () => _showAddCertificationDialog(context, uid, ref),
+              onTap: () => _showAddDialog(context, uid, ref),
             ),
           ],
         );
@@ -953,7 +1412,66 @@ class _CertificationsContent extends StatelessWidget {
     );
   }
 
-  void _showAddCertificationDialog(BuildContext ctx, String uid, WidgetRef ref) {
+  void _confirmDelete(BuildContext ctx, String uid, String id, String title) {
+    showDialog(
+      context: ctx,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Delete Certification'),
+        content: Text('Delete "$title"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
+              final navigator = Navigator.of(dCtx);
+              await ref.read(profileRepositoryProvider).deleteCertification(uid, id);
+              navigator.pop();
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditDialog(BuildContext ctx, String uid, Map<String, dynamic> c) {
+    final titleCtrl = TextEditingController(text: c['title'] as String? ?? '');
+    final issuerCtrl = TextEditingController(text: c['issuer'] as String? ?? '');
+    final dateCtrl = TextEditingController(text: c['date'] as String? ?? '');
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Edit Certification'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: titleCtrl, decoration: const InputDecoration(hintText: 'Certification Name')),
+            const SizedBox(height: 8),
+            TextField(controller: issuerCtrl, decoration: const InputDecoration(hintText: 'Issuer')),
+            const SizedBox(height: 8),
+            TextField(controller: dateCtrl, decoration: const InputDecoration(hintText: 'Date (e.g. May 2026)')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              await ref.read(profileRepositoryProvider).updateCertification(uid, c['id'] as String, {
+                'title': titleCtrl.text.trim(),
+                'issuer': issuerCtrl.text.trim(),
+                'date': dateCtrl.text.trim(),
+              });
+              if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddDialog(BuildContext ctx, String uid, WidgetRef ref) {
     final titleCtrl = TextEditingController();
     final issuerCtrl = TextEditingController();
     final dateCtrl = TextEditingController();
@@ -965,39 +1483,23 @@ class _CertificationsContent extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: titleCtrl,
-              decoration: const InputDecoration(hintText: 'Certification Name'),
-            ),
+            TextField(controller: titleCtrl, decoration: const InputDecoration(hintText: 'Certification Name')),
             const SizedBox(height: 8),
-            TextField(
-              controller: issuerCtrl,
-              decoration: const InputDecoration(hintText: 'Issuer'),
-            ),
+            TextField(controller: issuerCtrl, decoration: const InputDecoration(hintText: 'Issuer')),
             const SizedBox(height: 8),
-            TextField(
-              controller: dateCtrl,
-              decoration: const InputDecoration(hintText: 'Date (e.g. May 2026)'),
-            ),
+            TextField(controller: dateCtrl, decoration: const InputDecoration(hintText: 'Date (e.g. May 2026)')),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              await ref
-                  .read(profileRepositoryProvider)
-                  .addCertification(uid, {
+              await ref.read(profileRepositoryProvider).addCertification(uid, {
                 'title': titleCtrl.text.trim(),
                 'issuer': issuerCtrl.text.trim(),
                 'date': dateCtrl.text.trim(),
               });
-              if (dialogCtx.mounted) {
-                Navigator.pop(dialogCtx);
-              }
+              if (dialogCtx.mounted) Navigator.pop(dialogCtx);
             },
             child: const Text('Add'),
           ),
@@ -1006,6 +1508,8 @@ class _CertificationsContent extends StatelessWidget {
     );
   }
 }
+
+// ── Achievements ──────────────────────────────────────────
 
 class _AchievementsContent extends StatelessWidget {
   final String uid;
@@ -1020,26 +1524,14 @@ class _AchievementsContent extends StatelessWidget {
         final items = snap.data ?? [];
         return Column(
           children: [
-            ...items.map((a) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.star_rounded,
-                          size: 14, color: AppColors.accent),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          a['title'] as String? ?? '',
-                          style: AppTypography.bodySmall,
-                        ),
-                      ),
-                    ],
-                  ),
+            ...items.map((a) => _EditableAchievementItem(
+                  title: a['title'] as String? ?? '',
+                  onEdit: () => _showEditDialog(context, uid, a),
+                  onDelete: () => _confirmDelete(context, uid, a['id'] as String, a['title'] as String? ?? 'this entry'),
                 )),
             _AddButton(
               label: AppStrings.addAchievement,
-              onTap: () => _showAddAchievementDialog(context, uid, ref),
+              onTap: () => _showAddDialog(context, uid, ref),
             ),
           ],
         );
@@ -1047,7 +1539,57 @@ class _AchievementsContent extends StatelessWidget {
     );
   }
 
-  void _showAddAchievementDialog(BuildContext ctx, String uid, WidgetRef ref) {
+  void _confirmDelete(BuildContext ctx, String uid, String id, String title) {
+    showDialog(
+      context: ctx,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Delete Achievement'),
+        content: Text('Delete "$title"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
+              final navigator = Navigator.of(dCtx);
+              await ref.read(profileRepositoryProvider).deleteAchievement(uid, id);
+              navigator.pop();
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditDialog(BuildContext ctx, String uid, Map<String, dynamic> a) {
+    final titleCtrl = TextEditingController(text: a['title'] as String? ?? '');
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Edit Achievement'),
+        content: TextField(
+          controller: titleCtrl,
+          decoration: const InputDecoration(hintText: 'e.g. First place in Google Hackathon'),
+          maxLines: 2,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              await ref.read(profileRepositoryProvider).updateAchievement(uid, a['id'] as String, {
+                'title': titleCtrl.text.trim(),
+              });
+              if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddDialog(BuildContext ctx, String uid, WidgetRef ref) {
     final titleCtrl = TextEditingController();
 
     showDialog(
@@ -1060,20 +1602,13 @@ class _AchievementsContent extends StatelessWidget {
           maxLines: 2,
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              await ref
-                  .read(profileRepositoryProvider)
-                  .addAchievement(uid, {
+              await ref.read(profileRepositoryProvider).addAchievement(uid, {
                 'title': titleCtrl.text.trim(),
               });
-              if (dialogCtx.mounted) {
-                Navigator.pop(dialogCtx);
-              }
+              if (dialogCtx.mounted) Navigator.pop(dialogCtx);
             },
             child: const Text('Add'),
           ),
@@ -1082,6 +1617,8 @@ class _AchievementsContent extends StatelessWidget {
     );
   }
 }
+
+// ── Projects Link ─────────────────────────────────────────
 
 class _ProjectsLinkContent extends StatelessWidget {
   final String uid;
@@ -1105,15 +1642,20 @@ class _ProjectsLinkContent extends StatelessWidget {
 
 // ── Shared Sub-Widgets ─────────────────────────────────────
 
-class _TimelineItem extends StatelessWidget {
+/// A timeline item with edit and delete icons in the trailing area.
+class _EditableTimelineItem extends StatelessWidget {
   final String title;
   final String subtitle;
   final String trailing;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
-  const _TimelineItem({
+  const _EditableTimelineItem({
     required this.title,
     required this.subtitle,
     required this.trailing,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   @override
@@ -1143,10 +1685,101 @@ class _TimelineItem extends StatelessWidget {
               children: [
                 Text(title, style: AppTypography.titleMedium),
                 Text(subtitle, style: AppTypography.bodySmall),
+                if (trailing.isNotEmpty)
+                  Text(trailing, style: AppTypography.caption),
               ],
             ),
           ),
-          Text(trailing, style: AppTypography.caption),
+          // Edit / Delete action buttons
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: onEdit,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: AppColors.accentContainer,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.edit_outlined,
+                      size: 14, color: AppColors.accent),
+                ),
+              ),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: onDelete,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(Icons.delete_outline_rounded,
+                      size: 14, color: AppColors.error),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// An achievement row with edit and delete icons.
+class _EditableAchievementItem extends StatelessWidget {
+  final String title;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _EditableAchievementItem({
+    required this.title,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.star_rounded, size: 14, color: AppColors.accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(title, style: AppTypography.bodySmall),
+          ),
+          GestureDetector(
+            onTap: onEdit,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: AppColors.accentContainer,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(Icons.edit_outlined,
+                  size: 14, color: AppColors.accent),
+            ),
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: onDelete,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: AppColors.error.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(Icons.delete_outline_rounded,
+                  size: 14, color: AppColors.error),
+            ),
+          ),
         ],
       ),
     );

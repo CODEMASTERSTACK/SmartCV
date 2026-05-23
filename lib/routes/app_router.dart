@@ -9,6 +9,7 @@ import '../features/onboarding/presentation/screens/onboarding_wrapper.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/projects/presentation/screens/projects_screen.dart';
 import '../features/projects/presentation/screens/add_edit_project_screen.dart';
+import '../features/projects/presentation/screens/github_repo_view_screen.dart';
 import '../features/resume_generator/presentation/screens/generate_screen.dart';
 import '../features/resume_generator/presentation/screens/ai_analysis_screen.dart';
 import '../features/resume_generator/presentation/screens/project_selection_screen.dart';
@@ -120,6 +121,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   state,
                   AddEditProjectScreen(
                     projectId: state.pathParameters['projectId'],
+                  ),
+                ),
+              ),
+              GoRoute(
+                path: 'github-view/:projectId',
+                parentNavigatorKey: _rootNavigatorKey,
+                pageBuilder: (context, state) => _slideTransition(
+                  state,
+                  GitHubRepoViewScreen(
+                    projectId: state.pathParameters['projectId']!,
                   ),
                 ),
               ),

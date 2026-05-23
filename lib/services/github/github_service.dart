@@ -106,6 +106,39 @@ class GitHubService {
     final data = jsonDecode(resp.body) as Map<String, dynamic>;
     return data.keys.toList();
   }
+
+  /// Fetch public repositories for a specific GitHub username without requiring an OAuth token.
+  Future<List<GitHubRepo>> fetchPublicReposByUsername(String username,
+      {int perPage = 50}) async {
+    final repos = <GitHubRepo>[];
+    int page = 1;
+
+    while (true) {
+      final uri = Uri.parse(
+          '$_baseUrl/users/$username/repos?per_page=$perPage&page=$page&sort=updated');
+      final resp = await http.get(uri, headers: {
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'ai-career-os', // User agent recommended by GitHub API
+      });
+
+      if (resp.statusCode != 200) {
+        throw Exception('GitHub API error ${resp.statusCode}: ${resp.body}');
+      }
+
+      final data = jsonDecode(resp.body) as List<dynamic>;
+      if (data.isEmpty) break;
+
+      repos.addAll(data
+          .map((e) => GitHubRepo.fromJson(e as Map<String, dynamic>))
+          .where((r) => !r.isPrivate)); // public repos only
+
+      if (data.length < perPage) break;
+      page++;
+      if (page > 5) break; // Cap at 250 repos
+    }
+
+    return repos;
+  }
 }
 
 // ── Provider ───────────────────────────────────────────────

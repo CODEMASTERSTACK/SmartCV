@@ -30,4 +30,5 @@ class RouteNames {
   static const String historyDetail = '/history/:resumeId';
   static const String profile = '/profile';
   static const String editProfileSection = '/profile/edit/:section';
+  static const String githubRepoView = '/projects/github-view/:projectId';
 }

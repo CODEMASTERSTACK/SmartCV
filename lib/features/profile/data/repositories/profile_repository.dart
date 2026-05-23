@@ -62,6 +62,16 @@ class ProfileRepository {
     });
   }
 
+  Future<void> updateSkill(
+      String uid, String skillId, String newName) async {
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('skills')
+        .doc(skillId)
+        .update({'name': newName});
+  }
+
   Future<void> deleteSkill(String uid, String skillId) async {
     await _db
         .collection('users')
@@ -178,6 +188,16 @@ class ProfileRepository {
         .add({...data, 'createdAt': FieldValue.serverTimestamp()});
   }
 
+  Future<void> updateCertification(
+      String uid, String id, Map<String, dynamic> data) async {
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('certifications')
+        .doc(id)
+        .update(data);
+  }
+
   Future<void> deleteCertification(String uid, String id) async {
     await _db
         .collection('users')
@@ -207,6 +227,16 @@ class ProfileRepository {
         .doc(uid)
         .collection('achievements')
         .add({...data, 'createdAt': FieldValue.serverTimestamp()});
+  }
+
+  Future<void> updateAchievement(
+      String uid, String id, Map<String, dynamic> data) async {
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('achievements')
+        .doc(id)
+        .update(data);
   }
 
   Future<void> deleteAchievement(String uid, String id) async {

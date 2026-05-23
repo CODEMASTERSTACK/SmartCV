@@ -101,6 +101,119 @@ class _TemplateSelectionScreenState
             .toList(),
       );
 
+      // Fetch user profile sub-collections (skills, education, experience, certifications, achievements)
+      final skillsSnap = await ref.read(firestoreProvider)
+          .collection('users')
+          .doc(uid)
+          .collection('skills')
+          .orderBy('createdAt', descending: false)
+          .get();
+      final skillGroupsMap = <String, List<String>>{};
+      for (final doc in skillsSnap.docs) {
+        final d = doc.data();
+        final cat = d['category'] as String? ?? 'Other';
+        final name = d['name'] as String? ?? '';
+        if (name.isNotEmpty) {
+          skillGroupsMap.putIfAbsent(cat, () => []).add(name);
+        }
+      }
+      final skillGroupsList = skillGroupsMap.entries
+          .map((e) => ResumeSkillGroup(category: e.key, skills: e.value))
+          .toList();
+
+      final eduSnap = await ref.read(firestoreProvider)
+          .collection('users')
+          .doc(uid)
+          .collection('education')
+          .get();
+      final educationList = eduSnap.docs.map((doc) {
+        final m = doc.data();
+        final cgpaVal = m['cgpa'] as String? ?? m['percentage'] as String? ?? '';
+        final startMonth = m['startMonth'] as String? ?? '';
+        final startYear = m['startYear'] as String? ?? '';
+        final endMonth = m['endMonth'] as String? ?? '';
+        final endYear = m['endYear'] as String? ?? '';
+        
+        // Format duration nicely
+        String dur = "";
+        if (startMonth.isNotEmpty || startYear.isNotEmpty) {
+          dur = "$startMonth $startYear".trim();
+          if (endMonth.isNotEmpty || endYear.isNotEmpty) {
+            dur += " – $endMonth $endYear".trim();
+          }
+        }
+        
+        String inst = m['institution'] as String? ?? '';
+        final loc = m['location'] as String? ?? '';
+        if (loc.isNotEmpty && !inst.contains(loc)) {
+          inst = "$inst, $loc";
+        }
+        
+        return ResumeEducation(
+          institution: inst,
+          degree: m['degree'] as String? ?? '',
+          field: m['field'] as String? ?? '',
+          cgpa: cgpaVal,
+          duration: dur,
+        );
+      }).toList();
+
+      final expSnap = await ref.read(firestoreProvider)
+          .collection('users')
+          .doc(uid)
+          .collection('experience')
+          .get();
+      final experienceList = expSnap.docs.map((doc) {
+        final m = doc.data();
+        final bulletsList = m['bullets'] != null ? List<String>.from(m['bullets'] as List) : <String>[];
+        final startMonth = m['startMonth'] as String? ?? '';
+        final startYear = m['startYear'] as String? ?? '';
+        final endMonth = m['endMonth'] as String? ?? '';
+        final endYear = m['endYear'] as String? ?? '';
+        
+        String dur = "";
+        if (startMonth.isNotEmpty || startYear.isNotEmpty) {
+          dur = "$startMonth $startYear".trim();
+          if (endMonth.isNotEmpty || endYear.isNotEmpty) {
+            dur += " – $endMonth $endYear".trim();
+          } else {
+            dur += " – Present";
+          }
+        }
+        
+        return ResumeExperience(
+          company: m['company'] as String? ?? '',
+          role: m['role'] as String? ?? '',
+          duration: dur,
+          bullets: bulletsList,
+        );
+      }).toList();
+
+      final certsSnap = await ref.read(firestoreProvider)
+          .collection('users')
+          .doc(uid)
+          .collection('certifications')
+          .get();
+      final certificationsList = certsSnap.docs.map((doc) {
+        final m = doc.data();
+        return ResumeCertification(
+          title: m['title'] as String? ?? '',
+          issuer: m['issuer'] as String? ?? '',
+          date: m['date'] as String? ?? '',
+          credentialUrl: m['credentialUrl'] as String? ?? '',
+        );
+      }).toList();
+
+      final achsSnap = await ref.read(firestoreProvider)
+          .collection('users')
+          .doc(uid)
+          .collection('achievements')
+          .get();
+      final achievementsList = achsSnap.docs
+          .map((doc) => doc.data()['title'] as String? ?? '')
+          .where((s) => s.isNotEmpty)
+          .toList();
+
       // Build ResumeData
       final resumeData = ResumeData(
         name: user.name,
@@ -112,6 +225,11 @@ class _TemplateSelectionScreenState
         portfolioUrl: user.portfolioUrl,
         summary: summary.isNotEmpty ? summary : user.summary,
         projects: rewrittenProjects,
+        skillGroups: skillGroupsList,
+        education: educationList,
+        experience: experienceList,
+        certifications: certificationsList,
+        achievements: achievementsList,
       );
 
       // Compute ATS score (code, not AI)
